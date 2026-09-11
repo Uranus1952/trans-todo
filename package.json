@@ -1,0 +1,26 @@
+{
+  "name": "onederz",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Onederz — 跨平台桌面悬浮待办/备忘录（Windows + Android），支持多端实时同步",
+  "scripts": {
+    "setup": "npm --prefix server install && npm --prefix desktop install",
+    "start": "node scripts/start-all.js",
+    "start:nogpu": "node scripts/start-all.js --nogpu",
+    "server": "npm --prefix server start",
+    "desktop": "npm --prefix desktop start",
+    "desktop:dev": "npm --prefix desktop run dev",
+    "desktop:nogpu": "npm --prefix desktop run nogpu",
+    "build:win": "npm --prefix desktop run build",
+    "icons": "python scripts/make-icons.py",
+    "sync:mobile": "node scripts/sync-mobile.js",
+    "mobile:overlay": "node scripts/apply-android-overlay.js",
+    "preview": "node scripts/serve-app.js",
+    "test": "node scripts/smoke-test.js",
+    "test:desktop": "npm --prefix desktop run selftest"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

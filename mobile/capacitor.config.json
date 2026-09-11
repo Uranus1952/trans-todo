@@ -1,0 +1,18 @@
+{
+  "appId": "cn.onederz.widget",
+  "appName": "Onederz",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "loggingBehavior": "debug",
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true,
+    "backgroundColor": "#00000000"
+  },
+  "server": {
+    "androidScheme": "https",
+    "hostname": "localhost",
+    "iosScheme": "onederz"
+  }
+}

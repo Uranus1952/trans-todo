@@ -1,0 +1,22 @@
+{
+  "name": "Onederz 今日待办",
+  "short_name": "Onederz",
+  "description": "悬浮在桌面的待办与备忘录，常驻任务每日自动重置，多端实时同步。",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
+  "background_color": "#eef1fb",
+  "theme_color": "#5b6bff",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "新增常驻任务", "url": "./index.html?add=daily" },
+    { "name": "新增临时任务", "url": "./index.html?add=temp" }
+  ]
+}

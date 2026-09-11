@@ -1,0 +1,21 @@
+{
+  "name": "onederz-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Onederz Android 端（Capacitor + 原生悬浮窗）",
+  "scripts": {
+    "sync": "node ../scripts/sync-mobile.js && npx cap sync android",
+    "add:android": "npx cap add android",
+    "overlay": "node ../scripts/apply-android-overlay.js",
+    "setup": "npm install && node ../scripts/sync-mobile.js && npx cap add android && node ../scripts/apply-android-overlay.js && npx cap sync android",
+    "open": "npx cap open android",
+    "apk": "node ../scripts/sync-mobile.js && npx cap sync android && cd android && gradlew.bat assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/core": "^6.2.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.0"
+  }
+}

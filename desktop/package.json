@@ -1,0 +1,57 @@
+{
+  "name": "onederz-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Onederz Windows 桌面部件（Electron + 原生亚克力 / 桌面层挂载）",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "nogpu": "node scripts/launch-nogpu.js",
+    "selftest": "node scripts/launch-nogpu.js --selftest",
+    "build": "electron-builder --win --x64"
+  },
+  "devDependencies": {
+    "electron": "^44.3.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "cn.onederz.widget",
+    "productName": "Onederz",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../app",
+        "to": "app"
+      },
+      {
+        "from": "../server",
+        "to": "server",
+        "filter": [
+          "src/**/*",
+          "package.json",
+          "node_modules/**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "artifactName": "Onederz-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Onederz"
+    }
+  },
+  "dependencies": {
+    "onederz": "file:.."
+  }
+}

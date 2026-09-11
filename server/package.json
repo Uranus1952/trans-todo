@@ -1,0 +1,18 @@
+{
+  "name": "onederz-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Onederz 同步服务：账号 + 任务增量同步 + WebSocket 实时推送",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  },
+  "overrides": {
+    "qs": "^6.16.0"
+  }
+}

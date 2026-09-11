@@ -1,0 +1,6 @@
+{
+  "name": "onederz-app",
+  "private": true,
+  "type": "module",
+  "description": "Onederz 共享前端（Windows / Android / 浏览器 PWA 三端复用同一份 UI 与业务逻辑）"
+}

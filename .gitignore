@@ -1,0 +1,24 @@
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+release/
+
+# 运行时数据（同步服务的账号库与本机配置）
+server/data/
+
+# mobile/www 由 `npm run sync:mobile` 从 app/ 生成，不要手动提交
+mobile/www/
+
+# Capacitor 生成工程（由 `npx cap add android` 产生）
+mobile/android/
+mobile/ios/
+
+# 本机工作区文件
+.workbuddy/
+
+# 系统与日志
+*.log
+.DS_Store
+Thumbs.db
