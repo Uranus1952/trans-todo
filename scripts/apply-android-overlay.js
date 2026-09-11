@@ -50,9 +50,16 @@ if (!must(fs.existsSync(ANDROID), '未找到 mobile/android，请先执行：cd 
 }
 if (!must(fs.existsSync(MANIFEST), '未找到 AndroidManifest.xml')) process.exit(1);
 
-/* --------------------------- 2. 复制 Java --------------------------- */
+/* --------------------------- 2. 复制 Java 与组件资源 --------------------------- */
 const javaDest = path.join(ANDROID, 'app', 'src', 'main', 'java', PKG);
 copyTree(path.join(OVERLAY, 'app', 'src', 'main', 'java', PKG), javaDest);
+
+// 桌面小组件（AppWidget）的布局 / 背景 / 元数据 / 字符串
+const OVERLAY_RES = path.join(OVERLAY, 'app', 'src', 'main', 'res');
+if (fs.existsSync(OVERLAY_RES)) {
+  const n = copyTree(OVERLAY_RES, path.join(ANDROID, 'app', 'src', 'main', 'res'));
+  log(`组件资源：复制 ${n} 个文件`);
+}
 
 /* --------------------------- 3. 补 AndroidManifest --------------------------- */
 let manifest = fs.readFileSync(MANIFEST, 'utf8');
@@ -98,6 +105,32 @@ if (!manifest.includes(SERVICE_TAG)) {
   }
 } else {
   log('FloatingWidgetService 已存在，跳过');
+}
+
+/* --------------------------- 3.2 注册桌面小组件 receiver --------------------------- */
+const WIDGET_RECEIVER = 'TransTodoWidgetProvider';
+if (!manifest.includes(WIDGET_RECEIVER)) {
+  const receiver = `
+        <!-- Onederz 桌面小组件：类似天气卡片，长按桌面 → 小组件 → Onederz 添加 -->
+        <receiver
+            android:name=".TransTodoWidgetProvider"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/trans_todo_widget_info" />
+        </receiver>
+`;
+  if (manifest.includes('</application>')) {
+    manifest = manifest.replace(/\s*<\/application>/, `${receiver}    </application>`);
+    log('已注册 TransTodoWidgetProvider（桌面小组件）');
+  } else {
+    must(false, 'AndroidManifest.xml 缺少 </application>');
+  }
+} else {
+  log('TransTodoWidgetProvider 已存在，跳过');
 }
 
 fs.writeFileSync(MANIFEST, manifest, 'utf8');
