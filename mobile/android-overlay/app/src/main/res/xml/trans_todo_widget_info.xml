@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 桌面小组件元数据：默认 3x2 格，可横竖拉伸；每 30 分钟周期刷新一次
+     （保证凌晨跨天后常驻任务自动回到未完成，即使 App 没打开） -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="110dp"
+    android:targetCellWidth="3"
+    android:targetCellHeight="2"
+    android:maxResizeWidth="360dp"
+    android:updatePeriodMillis="1800000"
+    android:initialLayout="@layout/trans_todo_widget"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:description="@string/trans_todo_widget_description" />
