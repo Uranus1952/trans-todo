@@ -102,6 +102,27 @@ if (!manifest.includes(SERVICE_TAG)) {
 
 fs.writeFileSync(MANIFEST, manifest, 'utf8');
 
+/* --------------------------- 3.5 补 app/build.gradle 依赖 --------------------------- */
+/* FloatingWidgetService 用了 WebViewAssetLoader（androidx.webkit），
+   Capacitor 生成的模板未必包含它 —— 幂等注入一次。 */
+const BUILD_GRADLE = path.join(ANDROID, 'app', 'build.gradle');
+if (fs.existsSync(BUILD_GRADLE)) {
+  let gradle = fs.readFileSync(BUILD_GRADLE, 'utf8');
+  if (!gradle.includes('androidx.webkit')) {
+    if (gradle.includes('dependencies')) {
+      gradle = gradle.replace(/(dependencies\s*\{)/, `$1\n    // 悬浮窗的 WebViewAssetLoader 需要\n    implementation 'androidx.webkit:webkit:1.10.0'`);
+      fs.writeFileSync(BUILD_GRADLE, gradle, 'utf8');
+      log('已注入 androidx.webkit 依赖');
+    } else {
+      must(false, 'app/build.gradle 找不到 dependencies 块');
+    }
+  } else {
+    log('androidx.webkit 依赖已存在，跳过');
+  }
+} else {
+  must(false, '未找到 app/build.gradle');
+}
+
 /* --------------------------- 4. 注册插件 --------------------------- */
 const ACTIVITY = `package cn.onederz.widget;
 
