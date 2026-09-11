@@ -19,7 +19,25 @@ npm run preview       # 界面服务，默认 4317 端口
 
 ---
 
-## 路线 B：打包成 APK（含桌面悬浮窗）
+## 路线 B：GitHub Actions 云端构建（推荐，本机零依赖）
+
+仓库自带 CI（`.github/workflows/android.yml`）：每次推送到 `main` 或在
+**Actions → Android APK → Run workflow** 手动触发，GitHub 云端自动
+装配 Android 工程并编译 debug APK，产物在构建页面的 **Artifacts** 里下载
+（`trans-todo-debug-apk`）。**本机不需要装 Java / Android SDK / Android Studio。**
+
+手动触发：
+
+```bash
+# 也可以用 API 触发
+curl -X POST -H "Authorization: token <你的PAT>" \
+  https://api.github.com/repos/Uranus1952/trans-todo/actions/workflows/android.yml/dispatches \
+  -d '{"ref":"main"}'
+```
+
+---
+
+## 路线 C：本地打包 APK（含桌面悬浮窗）
 
 需要 **Android Studio**（含 Android SDK）与 **JDK 17**。
 
@@ -52,6 +70,23 @@ cd mobile && npm run setup
 cd mobile && npm run apk
 # 产物：mobile/android/app/build/outputs/apk/debug/app-debug.apk
 ```
+
+---
+
+## 桌面小组件（天气卡片式）怎么用
+
+不想开 App 也能一眼看到待办——**长按桌面空白处 → 小组件 / Widgets → Onederz → 拖到桌面**。
+
+| 特性 | 说明 |
+|---|---|
+| 显示内容 | 标题栏「今日待办 · 完成数/总数」+ 最多 9 条任务（✓ 已完成 / □ 未完成） |
+| 点击行为 | 点组件任意位置打开 App |
+| 尺寸 | 默认 3×2 格，可横向纵向自由拉伸 |
+| 数据更新 | App 内任何改动实时推送到组件；跨天后组件自动重置常驻任务状态（即使 App 没打开，系统每 30 分钟刷新一次） |
+| 多端一致 | 手机上勾选的任务，组件状态与 Windows / 其他设备同步更新 |
+
+> 组件与「桌面悬浮窗」是两个独立能力：小组件是标准桌面部件（不悬浮在应用之上），
+> 悬浮窗是覆盖在其他 App 上的浮层。二选一或都开都行。
 
 ---
 
