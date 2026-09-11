@@ -161,6 +161,28 @@ function render() {
   });
   renderHeader(el, { grouped: state.grouped, now });
   renderSyncBadge();
+  pushWidgetSnapshot();
+}
+
+/* ------------------- Android 桌面小组件（天气卡片式） -------------------
+ * 任务一变就把**原始数据**推给原生层，由 AppWidgetProvider 重绘桌面组件。
+ * 推原始数据而不是渲染结果：组件端自己按"今天"推导完成状态，
+ * 凌晨跨天后系统周期刷新组件时，即使 App 没打开常驻任务也会自动回到未完成。 */
+let widgetPushTimer = null;
+function pushWidgetSnapshot() {
+  if (!floating?.updateWidget) return;
+  clearTimeout(widgetPushTimer);
+  widgetPushTimer = setTimeout(() => {
+    try {
+      const today = M.dayKey(new Date());
+      const data = state.tasks
+        .filter((t) => t.type === M.TASK_DAILY || (t.type === M.TASK_TEMP && t.date === today))
+        .map((t) => ({ t: t.title, ty: t.type, d: t.date, dd: t.doneDate }));
+      floating.updateWidget({ data: JSON.stringify(data) }).catch(() => {});
+    } catch {
+      /* noop */
+    }
+  }, 400);
 }
 
 function renderSyncBadge(force) {
