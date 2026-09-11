@@ -10,7 +10,12 @@ const { startStaticServer } = require('../tools/static-server');
 const PORT = Number(process.argv[2] || process.env.PORT || 4317);
 
 (async () => {
-  const srv = await startStaticServer(path.join(__dirname, '..', 'app'), { port: PORT, quiet: true });
+  // 必须监听 0.0.0.0，否则手机访问打印出来的局域网地址会 connection refused
+  const srv = await startStaticServer(path.join(__dirname, '..', 'app'), {
+    port: PORT,
+    host: '0.0.0.0',
+    quiet: true,
+  });
   const lan = Object.values(os.networkInterfaces())
     .flat()
     .filter((i) => i && i.family === 'IPv4' && !i.internal)
