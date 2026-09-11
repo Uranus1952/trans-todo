@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="trans_todo_widget_title">今日待办</string>
+    <string name="trans_todo_widget_empty">今天没有待办\n点这里打开添加 +</string>
+    <string name="trans_todo_widget_description">一眼看到今天的待办，类似天气卡片</string>
+</resources>
