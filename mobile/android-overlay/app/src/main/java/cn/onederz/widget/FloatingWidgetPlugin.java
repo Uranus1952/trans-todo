@@ -95,6 +95,23 @@ public class FloatingWidgetPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    /**
+     * 桌面小组件数据同步：前端每次任务变化后调用。
+     * 传入任务原始数据的 JSON 数组（t=标题 ty=daily|temp d=日期 dd=完成日），
+     * 存入 SharedPreferences 后由 TransTodoWidgetProvider 重绘桌面组件。
+     */
+    @PluginMethod
+    public void updateWidget(PluginCall call) {
+        String json = call.getString("data");
+        Context ctx = getContext().getApplicationContext();
+        ctx.getSharedPreferences(TransTodoWidgetProvider.PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(TransTodoWidgetProvider.KEY_SNAPSHOT, json == null ? "[]" : json)
+                .apply();
+        TransTodoWidgetProvider.updateAll(ctx);
+        call.resolve();
+    }
+
     public static boolean hasOverlayPermission(Context ctx) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             return Settings.canDrawOverlays(ctx);
