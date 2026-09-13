@@ -739,6 +739,8 @@ function renderPanelNow() {
       toast('已退出登录', '本机数据保留，不再上传', 'ok');
       renderPanelNow();
     },
+    // 设置面板里的连接类错误用它弹明显提示（面板内的 hint 容易被忽略）
+    onToast: (title, msg, kind) => toast(title, msg, kind, 6000),
     onExport: exportBackup,
     onImport: importBackup,
     onClearDone: clearDone,
