@@ -30,7 +30,21 @@ const GLASS_PRESETS = [
 ];
 
 export function renderPanel(body, ctx) {
-  const { settings, onPatch, onLive, onLogin, onRegister, onLogout, onExport, onImport, onClearDone, onWipe, onTest, status } = ctx;
+  const {
+    settings,
+    onPatch,
+    onLive,
+    onLogin,
+    onRegister,
+    onLogout,
+    onExport,
+    onImport,
+    onClearDone,
+    onWipe,
+    onTest,
+    onToast,
+    status,
+  } = ctx;
   const logged = !!settings.token;
   const pct = Math.round((settings.glassOpacity ?? 0.62) * 100);
 
@@ -213,19 +227,64 @@ export function renderPanel(body, ctx) {
   $('fServer')?.addEventListener('change', (e) => onPatch({ serverUrl: e.target.value.trim().replace(/\/+$/, '') }));
 
   const auth = async (fn) => {
-    const hint = $('authHint');
-    const url = $('fServer').value.trim().replace(/\/+$/, '');
-    const username = $('fUser').value.trim();
-    const password = $('fPass').value;
+    /* 关键：只能通过 $() 现取元素，不能提前缓存引用 ——
+       onPatch({ serverUrl }) 会重建整个面板 DOM，缓存的引用会变成脱离文档的旧节点，
+       往里写错误信息用户什么都看不到（表现为"点了没反应"）。 */
+    let { hint, bLogin, bReg, url, username, password } = readAuth();
+
+    if (!username || !password) {
+      if (hint) hint.innerHTML = '<span style="color:var(--danger)">请先填写用户名和密码</span>';
+      return;
+    }
+
+    // 先提交服务器地址（可能触发面板重绘），之后所有元素引用必须重新获取
+    onPatch({ serverUrl: url });
+    ({ hint, bLogin, bReg } = readAuth());
+
+    const reset = () => {
+      [readAuth().bLogin, readAuth().bReg].forEach((b) => {
+        if (b) {
+          b.disabled = false;
+          if (b.dataset.label) b.textContent = b.dataset.label;
+        }
+      });
+    };
+    [bLogin, bReg].forEach((b) => {
+      if (b) {
+        b.dataset.label = b.dataset.label || b.textContent;
+        b.disabled = true;
+      }
+    });
+    if (hint) hint.textContent = `正在连接 ${url || '(未填服务器地址)'} …`;
+
     try {
-      onPatch({ serverUrl: url });
       await fn(username, password);
     } catch (err) {
-      if (hint) {
-        hint.innerHTML = `<span style="color:var(--danger)">${esc(err.message)}</span>`;
+      const msg = err?.message || String(err);
+      const h = readAuth().hint;
+      if (h) {
+        h.innerHTML = `<span style="color:var(--danger)">连接失败：${esc(msg)}<br>服务器地址 = ${esc(
+          url || '(空)'
+        )}，请确认同步服务已启动、且手机与电脑在同一 WiFi。</span>`;
       }
+      // 提示栏在设置面板里容易被忽略 —— 再弹一条明显的
+      onToast?.('连接失败', msg.slice(0, 80), 'del');
+    } finally {
+      reset();
     }
   };
+
+  /** 每次都从 DOM 现取，避免引用过期 */
+  function readAuth() {
+    return {
+      hint: $('authHint'),
+      bLogin: $('btnLogin'),
+      bReg: $('btnRegister'),
+      url: ($('fServer')?.value || '').trim().replace(/\/+$/, ''),
+      username: ($('fUser')?.value || '').trim(),
+      password: $('fPass')?.value || '',
+    };
+  }
 
   $('btnLogin')?.addEventListener('click', () => auth(onLogin));
   $('btnRegister')?.addEventListener('click', () => auth(onRegister));
