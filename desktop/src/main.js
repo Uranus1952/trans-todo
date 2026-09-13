@@ -19,6 +19,7 @@ const { app, BrowserWindow, ipcMain, Tray, Menu, screen, nativeImage, dialog, sh
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
+const { spawn } = require('node:child_process');
 
 const config = require('./config');
 const native = require('./win32');
@@ -189,8 +190,15 @@ app.whenReady().then(async () => {
   applyAutoStart();
 
   // 后台托管同步服务：部件常驻托盘，服务就一直在，手机端随时可连
-  const srv = await ensureSyncServer();
-  if (isDev) console.log('[server] 同步服务状态：', JSON.stringify(srv));
+  // 注意：这里失败**绝不能**中断后面的初始化（曾经因为用了未导入的 spawn 抛错，
+  // 导致整条 whenReady 链断掉、同步服务永远起不来 —— 手机端也就连不上）
+  let srv = { started: false };
+  try {
+    srv = await ensureSyncServer();
+  } catch (err) {
+    console.warn('[server] 同步服务托管失败（不影响部件本身）：', err.message);
+  }
+  console.log('[server] 同步服务状态：', JSON.stringify(srv));
 
   const info = await native.systemInfo();
   console.log(`[native] Windows ${info.osVersion} · WorkerW=${info.hasWorkerW ? '可用' : '不可用'}`);
@@ -198,6 +206,8 @@ app.whenReady().then(async () => {
   if (SELFTEST) {
     setTimeout(async () => {
       const cfg = config.load();
+      const serverUp = await isServerUp();
+      console.log('[selftest] 同步服务可连通 =', serverUp);
       const st = await win.webContents
         .executeJavaScript(
           `(async () => {
@@ -382,6 +392,60 @@ app.whenReady().then(async () => {
         log.step11_grain = getComputedStyle(document.getElementById('widget')).getPropertyValue('--grain').trim();
         log.step11_blur = getComputedStyle(document.getElementById('widget')).backdropFilter || 'none';
 
+        // 12) 注册 / 登录的真实点击路径（这段此前没有覆盖，所以"点了没反应"没被测出来）
+        const serverUrl = 'http://127.0.0.1:8787';
+        if (!app.state.panelOpen) app.openPanel();
+        await wait(120);
+        const pbody = document.getElementById('panelBody');
+        const btnReg = pbody.querySelector('#btnRegister');
+        log.step12_found = !!btnReg;
+        log.step12_ids = [...pbody.querySelectorAll('[id]')].map((x) => x.id).join(',');
+        log.step12_loggedIn = !!app.state.settings.token;
+        if (btnReg) {
+          // 12a) 空用户名就点登录：应当场提示，而不是静默无反应
+          pbody.querySelector('#btnLogin').click();
+          await wait(80);
+          log.step13_emptyHint = (pbody.querySelector('#authHint') || {}).textContent || '';
+          log.step12_btnEnabled = !pbody.querySelector('#btnRegister').disabled;
+
+          // 12b) 填好信息点注册：服务在线时应真正注册成功并拿到令牌
+          //     （连通性由主进程探测后注入 —— 渲染进程里的 fetch 对已关闭端口可能长时间挂起）
+          const serverUp = ${serverUp};
+          pbody.querySelector('#fServer').value = serverUrl;
+          pbody.querySelector('#fUser').value = 'selftest_' + Date.now().toString(36);
+          pbody.querySelector('#fPass').value = 'test123456';
+          btnReg.click();
+          const tries = serverUp ? 30 : 8;
+          for (let i = 0; i < tries && !app.state.settings.token; i++) await wait(500);
+          log.step12_serverUp = serverUp;
+          log.step12_token = !!app.state.settings.token;
+          log.step12_hint = (pbody.querySelector('#authHint') || {}).textContent || '';
+          log.step12_loggedView = /退出登录/.test(document.getElementById('panelBody').innerHTML);
+          if (app.state.settings.token) {
+            app.engine.signOut();
+            app.renderPanelNow(); // 直接调 engine 不会自动重绘面板
+            await wait(80);
+            log.step12_backToLoginView = !!document
+              .getElementById('panelBody')
+              .querySelector('#btnRegister');
+          }
+
+          // 12c) 服务器地址不可达（指向死端口）：必须弹出明确错误，而不是静默无反应
+          const pb3 = document.getElementById('panelBody');
+          pb3.querySelector('#fServer').value = 'http://127.0.0.1:9';
+          pb3.querySelector('#fUser').value = 'someone';
+          pb3.querySelector('#fPass').value = 'whatever';
+          pb3.querySelector('#btnLogin').click();
+          for (let i = 0; i < 30; i++) {
+            const h = (pb3.querySelector('#authHint') || {}).textContent || '';
+            if (h.indexOf('连接失败') >= 0) break;
+            await wait(500);
+          }
+          log.step14_unreachableHint = (pb3.querySelector('#authHint') || {}).textContent || '';
+          log.step14_btnUsable = !pb3.querySelector('#btnLogin').disabled;
+        }
+        app.closePanel();
+
         app.state.tasks = [];
         app.state.settings.glassOpacity = 0.55;
         app.applyTheme();
@@ -455,6 +519,13 @@ app.whenReady().then(async () => {
         ['预设可来回切换', st.step9_backToLight === true],
         ['无系统模糊时由页面承担浓度', st.step10_minTransparent === true],
         ['浓度可调范围足够宽（≥0.8）', st.step10_span >= 0.8],
+        ['注册按钮点击后有反馈且恢复可用', st.step12_btnEnabled === true],
+        ...(st.step12_serverUp
+          ? [['同步服务在线时注册成功并拿到令牌', st.step12_token === true]]
+          : []),
+        ['空用户名点登录会当场提示', /填写/.test(st.step13_emptyHint)],
+        ['服务器不可达时给出明确错误（不是静默无反应）', /连接失败/.test(st.step14_unreachableHint)],
+        ['失败后按钮恢复可用（不会卡死）', st.step14_btnUsable === true],
         ['时长解析：一小时', st.step11_parseHour === true],
         ['时长解析：30分钟', st.step11_parseMin === true],
         ['时长解析：1.5小时', st.step11_parseHalf === true],
