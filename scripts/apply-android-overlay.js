@@ -133,6 +133,22 @@ if (!manifest.includes(WIDGET_RECEIVER)) {
   log('TransTodoWidgetProvider 已存在，跳过');
 }
 
+/* --------------------------- 3.3 允许明文 HTTP（连本地同步服务必需） --------------------------- */
+/* Android 9+ 默认禁止明文 HTTP。同步服务跑在用户自己的电脑上（http://192.168.x.x:8787），
+   不放开这条，手机端所有请求都会被系统拦掉 —— 表现为"点注册/登录没反应"。
+   只对用户自己填的局域网地址生效，App 自身资源仍走 https://localhost。 */
+if (!manifest.includes('usesCleartextTraffic')) {
+  if (manifest.includes('<application')) {
+    manifest = manifest.replace(/(<application\b[^>]*?)(\s*>)/,
+      '$1\n        android:usesCleartextTraffic="true"$2');
+    log('已允许明文 HTTP（usesCleartextTraffic）—— 手机才能连上电脑的 LAN 同步服务');
+  } else {
+    must(false, 'AndroidManifest.xml 缺少 <application>');
+  }
+} else {
+  log('usesCleartextTraffic 已配置，跳过');
+}
+
 fs.writeFileSync(MANIFEST, manifest, 'utf8');
 
 /* --------------------------- 3.5 补 app/build.gradle 依赖 --------------------------- */
