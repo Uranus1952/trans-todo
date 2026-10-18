@@ -41,6 +41,9 @@ const restart = process.argv.includes('--restart');
 const children = [];
 let shuttingDown = false;
 let desktopStartedAt = 0;
+let desktopSoftware = false; // 本次是否以软件渲染启动
+let desktopRetried = false; // GPU 崩溃后是否已经自动重试过
+let desktopGpuCrash = false; // 子进程日志里是否出现过 GPU 崩溃特征
 
 const C = { 同步: '\x1b[36m', 桌面: '\x1b[35m', 启动: '\x1b[32m', 错误: '\x1b[31m', 提示: '\x1b[33m' };
 const log = (tag, msg) => console.log(`${C[tag] || ''}[${tag}]\x1b[0m ${msg}`);
@@ -260,31 +263,60 @@ function printAlreadyRunning(info) {
   彻底退出：在本窗口按 \x1b[36mCtrl+C\x1b[0m，或托盘右键 → 退出。
 `);
 
-  const args = [DESKTOP_DIR];
-  const env = { ...process.env };
-  if (nogpu) {
-    args.push('--no-sandbox', '--disable-gpu', '--disable-gpu-sandbox', '--use-gl=swiftshader', '--disable-dev-shm-usage');
-    env.ONEDERZ_NO_GPU = '1';
-  }
+  /**
+   * 启动桌面部件。
+   * @param {boolean} software 是否强制软件渲染
+   */
+  function launchDesktop(software) {
+    const args = [DESKTOP_DIR];
+    const env = { ...process.env };
+    if (software) {
+      args.push('--no-sandbox', '--disable-gpu', '--disable-gpu-sandbox', '--use-gl=swiftshader', '--disable-dev-shm-usage');
+      env.ONEDERZ_NO_GPU = '1';
+    }
 
-  log('启动', nogpu ? '正在以软件渲染启动桌面部件…' : '正在启动桌面部件…');
-  desktopStartedAt = Date.now();
-  const desktop = spawn(electronPath, args, { cwd: DESKTOP_DIR, env, stdio: ['ignore', 'pipe', 'pipe'] });
-  children.push(desktop);
-  pipe(desktop, '桌面');
-  desktop.on('error', (e) => die('桌面部件启动失败：' + e.message));
-  desktop.on('exit', (code) => {
-    if (shuttingDown) return;
-    const lived = Date.now() - desktopStartedAt;
+    log('启动', software ? '正在以软件渲染启动桌面部件…' : '正在启动桌面部件…');
+    desktopStartedAt = Date.now();
+    desktopSoftware = software;
+    const child = spawn(electronPath, args, { cwd: DESKTOP_DIR, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    children.push(child);
+    pipe(child, '桌面');
+    child.stderr?.on('data', (buf) => {
+      if (/GPU process isn't usable|GPU process exited unexpectedly/i.test(String(buf))) {
+        desktopGpuCrash = true;
+      }
+    });
+    child.on('error', (e) => die('桌面部件启动失败：' + e.message));
+    child.on('exit', (code) => {
+      if (shuttingDown) return;
+      const lived = Date.now() - desktopStartedAt;
 
-    // 秒退且退出码为 0：几乎一定是"已有一个实例在跑"导致新实例让位，
-    // 或者是 userData 目录被占用。这时不要把同步服务一起带走 ——
-    // 用户很可能只是想在旧实例上看到部件而已。
-    if (code === 0 && lived < 6000) {
-      const alive = readRunningInstance();
-      console.log('');
-      log('提示', alive ? `检测到已有实例在运行（进程号 ${alive.pid}）。` : '桌面部件启动后立即退出了。');
-      console.log(`
+      // ① GPU 崩溃：Chromium 的 GPU 进程一启动就挂（显卡驱动/系统更新后常见），
+      //    Electron 会以非 0 代码秒退 —— 用户看起来就是"双击没反应"。
+      //    自动改用软件渲染重试，并把选择记进配置，下次直接走软件渲染。
+      const earlyCrash = code !== 0 && lived < 20000;
+      if (!software && !desktopRetried && earlyCrash) {
+        desktopRetried = true;
+        console.log('');
+        log(
+          '桌面',
+          desktopGpuCrash
+            ? '检测到 GPU 进程崩溃（显卡驱动与 Chromium 不兼容），自动改用软件渲染重试…'
+            : `桌面部件启动即退出（代码 ${code}），自动改用软件渲染重试…`
+        );
+        rememberSoftwareRender();
+        launchDesktop(true);
+        return;
+      }
+
+      // ② 秒退且退出码为 0：几乎一定是"已有一个实例在跑"导致新实例让位，
+      //    或者是 userData 目录被占用。这时不要把同步服务一起带走 ——
+      //    用户很可能只是想在旧实例上看到部件而已。
+      if (code === 0 && lived < 6000) {
+        const alive = readRunningInstance();
+        console.log('');
+        log('提示', alive ? `检测到已有实例在运行（进程号 ${alive.pid}）。` : '桌面部件启动后立即退出了。');
+        console.log(`
   常见原因：上一次的 Onederz 还在后台运行（关掉窗口不会退出，它常驻托盘），
   新实例拿不到数据目录锁，于是自动让位。
 
@@ -295,13 +327,57 @@ function printAlreadyRunning(info) {
 
   \x1b[33m同步服务仍在运行\x1b[0m（手机端可以继续同步）。按 Ctrl+C 结束。
 `);
-      return; // 保留同步服务
-    }
+        return; // 保留同步服务
+      }
 
-    log('桌面', `已退出（代码 ${code}）。`);
-    shutdown(code ?? 0);
-  });
+      // ③ 软件渲染也失败：给出可执行的排查方向
+      if (software && code !== 0 && lived < 20000) {
+        console.log(`
+  \x1b[31m桌面部件在软件渲染下也无法启动。\x1b[0m
+  请把上面几行错误日志发出来；也可以先手动确认：
+    - 任务管理器里是否还有残留的 electron.exe（结束它们再试）
+    - 双击「重启 Onederz.cmd」强制重启
+`);
+      }
+
+      log('桌面', `已退出（代码 ${code}）。`);
+      shutdown(code ?? 0);
+    });
+    return child;
+  }
+
+  launchDesktop(nogpu || readSoftwareRender());
 })();
+
+/** 读取上次自动降级时记下的"使用软件渲染"标记 */
+function readSoftwareRender() {
+  try {
+    const file = path.join(process.env.APPDATA || '', 'onederz-desktop', 'desktop-config.json');
+    return JSON.parse(fs.readFileSync(file, 'utf8')).softwareRender === true;
+  } catch {
+    return false;
+  }
+}
+
+/** 记住"这台机器要用软件渲染"，下次启动直接用 */
+function rememberSoftwareRender() {
+  try {
+    const dir = path.join(process.env.APPDATA || '', 'onederz-desktop');
+    const file = path.join(dir, 'desktop-config.json');
+    let cfg = {};
+    try {
+      cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+    } catch {
+      /* 没有配置文件就用空对象 */
+    }
+    cfg.softwareRender = true;
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(cfg, null, 2), 'utf8');
+    log('桌面', '已记住该设置：以后直接用软件渲染启动（恢复方法见说明）');
+  } catch (err) {
+    log('桌面', '写入软件渲染标记失败（不影响本次运行）：' + err.message);
+  }
+}
 
 process.on('SIGINT', () => {
   log('启动', '收到 Ctrl+C，正在关闭…');
