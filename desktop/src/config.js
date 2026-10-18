@@ -24,6 +24,9 @@ const DEFAULTS = {
   minWidth: 268,
   minHeight: 216,
   applyRounding: true,
+  // 软件渲染：当系统/显卡驱动让 Chromium 的 GPU 进程崩溃时（表现为双击后立刻退出），
+  // 启动器会自动改成 true 并重试。需要恢复硬件加速时把它改回 false 即可。
+  softwareRender: false,
 };
 
 let cache = null;
