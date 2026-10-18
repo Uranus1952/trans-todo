@@ -28,6 +28,25 @@ const { startStaticServer } = require('../../tools/static-server');
 const isDev = process.argv.includes('--dev') || !app.isPackaged;
 const SELFTEST = !!process.env.ONEDERZ_SELFTEST;
 
+/* ---------------------------- 软件渲染 ----------------------------
+ * 某些 Windows / 显卡驱动组合会让 Chromium 的 GPU 进程崩溃
+ * （日志：GPU process exited unexpectedly / GPU process isn't usable），
+ * Electron 随之直接退出 —— 用户看到的就是"双击后没反应"。
+ *
+ * 启动器（scripts/start-all.js）检测到秒退后会自动写入 softwareRender=true
+ * 并用软件渲染重试；这里在 ready 之前读配置关掉硬件加速。
+ * 也可用环境变量 ONEDERZ_NO_GPU=1 或 `--software` 参数强制。
+ * ------------------------------------------------------------------ */
+try {
+  const earlyCfg = config.load();
+  if (earlyCfg.softwareRender || process.env.ONEDERZ_NO_GPU || process.argv.includes('--software')) {
+    app.disableHardwareAcceleration();
+    console.log('[gpu] 已禁用硬件加速（软件渲染模式）');
+  }
+} catch (_err) {
+  /* 配置读不到就按默认走硬件加速 */
+}
+
 /** 共享前端的物理位置：开发时在仓库 app/，打包后在 resources/app/ */
 function resolveAppDir() {
   const packed = path.join(process.resourcesPath || '', 'app');
@@ -964,6 +983,32 @@ function refreshTrayMenu() {
           { label: '仅模糊（性能更好）', type: 'radio', checked: cfg.backdrop === 'blur', click: () => setBackdrop('blur') },
           { label: '关闭系统模糊', type: 'radio', checked: cfg.backdrop === 'none', click: () => setBackdrop('none') },
         ],
+      },
+      {
+        // 显卡驱动与 Chromium 冲突时，GPU 进程会崩溃导致部件起不来；
+        // 启动器会自动切到软件渲染并记住。驱动修好后在这里切回来。
+        label: '图形加速（关闭可修复启动即退出）',
+        type: 'checkbox',
+        checked: !cfg.softwareRender,
+        click: (item) => {
+          config.save({ softwareRender: !item.checked });
+          dialog
+            .showMessageBox({
+              type: 'info',
+              title: '需要重启 Onederz',
+              message: item.checked ? '已启用图形加速' : '已改用软件渲染',
+              detail: '下次启动生效。建议双击「重启 Onederz.cmd」立即应用。',
+              buttons: ['重启', '稍后'],
+              defaultId: 0,
+              cancelId: 1,
+            })
+            .then((r) => {
+              if (r.response === 0) {
+                app.relaunch();
+                app.exit(0);
+              }
+            });
+        },
       },
       { type: 'separator' },
       { label: '打开设置与同步', click: () => send('open-settings') },
