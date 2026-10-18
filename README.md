@@ -299,8 +299,17 @@ node node_modules\electron\install.js
 按 `Win+D` 回到桌面，或按 `Alt+Space` 强制显隐，也可以点系统托盘里的 Onederz 图标。
 想让它一直可见，切到「普通窗口 · 一直显示在最底层」。
 
-**启动后终端报 GPU 相关错误、窗口一闪就没了？**
-用 `启动 Onederz（无 GPU）.cmd`，或在项目目录跑 `npm run start:nogpu`。
+**双击后没反应 / 窗口一闪就没了 / 控制台报 GPU 错误？**
+
+这是 Windows + 显卡驱动与 Chromium 的 GPU 进程不兼容（日志特征：
+`GPU process exited unexpectedly` 后紧跟 `GPU process isn't usable. Goodbye.`，
+退出码 3）。
+
+**现在不用手动处理了**：启动器检测到这种秒退会自动改用软件渲染重启，并把选择
+记进配置（`desktop-config.json` 的 `softwareRender: true`），以后直接走软件渲染。
+如果之后更新了显卡驱动想恢复硬件加速：托盘右键 → **图形加速** 打勾 → 重启。
+
+也可以手动强制：`启动 Onederz（无 GPU）.cmd`，或 `npm run start:nogpu`。
 
 **手机连不上电脑的同步服务？**
 
