@@ -197,11 +197,62 @@ if (!app.requestSingleInstanceLock()) {
   });
 }
 
+/* ======================= 本地页面服务（端口必须固定） =======================
+ * localStorage 按「协议 + 主机 + 端口」隔离。早期这里用 `port: 0` 让系统随机分配，
+ * 结果每次启动都是一个新的 origin —— 用户看到的就是"关机重启后待办全没了"。
+ *
+ * 现在：优先用配置里的端口（默认 4317）；被占用时先看占用者是不是我们自己
+ * （比如 `npm run preview`，它服务的也是同一份 app/，可以直接复用，origin 不变），
+ * 否则在 4317–4320 里另找一个并**持久化**，后续启动保持同一个 origin。
+ * ======================================================================== */
+const PORT_CANDIDATES = [4317, 4318, 4319, 4320];
+
+async function isOurAppServedAt(port) {
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 1200);
+    const res = await fetch(`http://127.0.0.1:${port}/index.html`, { signal: ctrl.signal });
+    clearTimeout(tid);
+    if (!res.ok) return false;
+    const html = await res.text();
+    return /onederzApp|id="widget"/i.test(html);
+  } catch {
+    return false;
+  }
+}
+
+async function startAppServer(appDir) {
+  const cfg = config.load();
+  const preferred = Number(cfg.staticPort) > 0 ? Number(cfg.staticPort) : PORT_CANDIDATES[0];
+  // 配置的端口优先；其余候选作为兜底
+  const candidates = [...new Set([preferred, ...PORT_CANDIDATES])];
+
+  for (const port of candidates) {
+    try {
+      const srv = await startStaticServer(appDir, { port, host: '127.0.0.1', quiet: true });
+      if (Number(cfg.staticPort) !== port) config.save({ staticPort: port });
+      if (port !== PORT_CANDIDATES[0]) {
+        console.warn(`[static] 端口 ${PORT_CANDIDATES[0]} 被别的程序占用，改用 ${port} 并已记住`);
+      }
+      console.log(`[static] 页面服务 http://127.0.0.1:${port}/`);
+      return srv;
+    } catch (err) {
+      if (err && err.code !== 'EADDRINUSE') throw err;
+      // 占用者若是我们自己的页面服务（如 npm run preview），直接复用，保持同一 origin
+      if (await isOurAppServedAt(port)) {
+        console.log(`[static] 复用已在 ${port} 上运行的 Onederz 页面服务（本地数据不受影响）`);
+        return { url: `http://127.0.0.1:${port}/`, port, close: async () => {} };
+      }
+    }
+  }
+  throw new Error('无法在 4317–4320 上启动本地页面服务，请关闭占用这些端口的程序后重试');
+}
+
 /* ============================ 主流程 ============================ */
 
 app.whenReady().then(async () => {
   const appDir = resolveAppDir();
-  staticSrv = await startStaticServer(appDir, { quiet: true });
+  staticSrv = await startAppServer(appDir);
 
   createWindow();
   createTray();
@@ -511,6 +562,8 @@ app.whenReady().then(async () => {
           ? [['桌面层挂载经真实窗口校验通过', diag.desktopAttached === true]]
           : []),
         ['窗口圆角已施加', lastRounding === '1' || lastRounding === '2'],
+        // localStorage 按 origin（含端口）隔离：端口随机 = 每次启动都是空数据库
+        ['页面服务端口固定（本地数据不会因重启丢失）', Number(config.load().staticPort) === 4317],
         ['通过界面添加常驻任务', st.step1_rows === 1],
         ['切换到临时类型', st.step2_addType === 'temp'],
         ['临时任务带倒计时徽标', !!st.step2_cdChip && st.step2_cdChip.startsWith('剩')],
