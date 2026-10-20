@@ -1151,6 +1151,7 @@ async function boot() {
       if (cfg?.tint) state.settings.tint = cfg.tint;
       if (cfg?.opacity) state.settings.glassOpacity = cfg.opacity;
       if (cfg?.accent) state.settings.accent = cfg.accent;
+      if (cfg?.glassBase) state.settings.glassBase = cfg.glassBase;
       if (cfg?.collapsed) {
         state.collapsed = true;
         el.widget.dataset.collapsed = '1';
@@ -1186,6 +1187,8 @@ async function boot() {
     state.desktop.autoStart = !!cfg.autoStart;
     if (cfg.tint) state.settings.tint = cfg.tint;
     if (cfg.opacity) state.settings.glassOpacity = cfg.opacity;
+    if (cfg.accent) state.settings.accent = cfg.accent;
+    if (cfg.glassBase) state.settings.glassBase = cfg.glassBase;
     applyTheme();
     if (state.panelOpen) renderPanelNow();
   });
