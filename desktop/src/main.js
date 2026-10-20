@@ -132,6 +132,8 @@ let staticSrv = null;
 let cursorTimer = null;
 let modeTimer = null;
 let userHidden = false;
+// 启动后的短暂"保持显示"窗口期：避免双击后看不到部件而以为没启动
+let startupHoldUntil = 0;
 let degradedReason = null;
 let lastDiag = null;
 let lastAttachOk = false;
@@ -748,7 +750,33 @@ function createWindow() {
 
   win.once('ready-to-show', async () => {
     await applyNativeLayer({ firstRun: true });
+    // 启动后先强制显示几秒：默认的 autohide 会在"前台不是桌面"时立刻隐藏，
+    // 用户双击启动器后控制台窗口就在前台 —— 会误以为程序没启动。
+    startupHoldUntil = Date.now() + 5000;
     win.showInactive();
+    // 双击启动器时前台是控制台窗口，普通层级下部件可能被它盖住 ——
+    // 先临时置顶 5 秒做"我起来了"的确认，随后恢复用户设定的层级。
+    const modeNow = config.load().mode;
+    if (modeNow !== 'top') {
+      win.setAlwaysOnTop(true);
+      win.moveTop();
+      setTimeout(() => {
+        if (!win || win.isDestroyed()) return;
+        win.setAlwaysOnTop(false);
+        applyModeLoop(config.load().mode);
+      }, 5200);
+    }
+    console.log('[ui] 部件已显示（5 秒后按桌面显隐规则自动隐藏；Alt+Space 可随时显隐）');
+    try {
+      tray?.displayBalloon({
+        title: 'Onederz 已启动',
+        content: '按 Alt+Space 显示 / 隐藏；关闭窗口不会退出，它在托盘里常驻。',
+        iconType: 'info',
+        noSound: true,
+      });
+    } catch {
+      /* 部分系统不支持气泡提示，忽略 */
+    }
     // DWM 圆角在窗口真正显示后再补一次更稳（部分机器首次调用会返回失败）
     if (config.load().applyRounding) {
       setTimeout(() => native.applyRounded(win, 22), 700);
@@ -976,6 +1004,8 @@ function applyModeLoop(mode) {
   if (mode === 'autohide') {
     modeTimer = setInterval(async () => {
       if (!win || win.isDestroyed() || session || userHidden) return;
+      // 启动后 5 秒内不隐藏：让用户确认"它确实起来了"
+      if (Date.now() < startupHoldUntil) return;
       const onTop = await native.isDesktopOnTop(win);
       if (onTop && !win.isVisible()) win.showInactive();
       else if (!onTop && win.isVisible()) win.hide();
