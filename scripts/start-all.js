@@ -55,7 +55,29 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /* ============================ 实例检测 ============================ */
 
-/** 读取实例锁文件；返回仍在运行的实例信息，或 null */
+/** 判断某个 PID 现在是不是 electron 进程（防止 PID 被系统复用后误判"已在运行"） */
+function isElectronProcess(pid) {
+  if (process.platform !== 'win32') return true;
+  try {
+    const r = spawnSync('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], {
+      encoding: 'utf8',
+      windowsHide: true,
+    });
+    return /^"[^"]*electron\.exe"/i.test((r.stdout || '').trim());
+  } catch {
+    return false;
+  }
+}
+
+function clearLockFile() {
+  try {
+    fs.unlinkSync(LOCK_FILE);
+  } catch {
+    /* noop */
+  }
+}
+
+/** 读取实例锁文件；返回仍在运行的实例信息，或 null（顺带清理陈旧锁） */
 function readRunningInstance() {
   let info;
   try {
@@ -64,13 +86,30 @@ function readRunningInstance() {
     return null;
   }
   if (!info || !info.pid) return null;
+
+  // 超过 24 小时的锁一律视为陈旧（防止崩溃/强杀留下的残留）
+  if (info.startedAt && Date.now() - info.startedAt > 24 * 3600 * 1000) {
+    clearLockFile();
+    return null;
+  }
+
   try {
     process.kill(info.pid, 0); // 只探测存在性
-    return info;
   } catch (err) {
     // ESRCH = 进程已不存在（残留锁文件）；其它错误保守认为还活着
-    return err && err.code === 'ESRCH' ? null : info;
+    if (err && err.code === 'ESRCH') {
+      clearLockFile();
+      return null;
+    }
+    return info;
   }
+
+  // PID 存在不代表就是我们的进程：Windows 会复用 PID
+  if (!isElectronProcess(info.pid)) {
+    clearLockFile();
+    return null;
+  }
+  return info;
 }
 
 function killInstance(pid) {
