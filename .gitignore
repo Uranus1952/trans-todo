@@ -22,3 +22,11 @@ mobile/ios/
 *.log
 .DS_Store
 Thumbs.db
+
+# 本地构建产物
+trans-todo-apk/
+*.apk
+*.aab
+
+# 数据恢复产物（含个人任务，不入库）
+onederz-recovered.json
